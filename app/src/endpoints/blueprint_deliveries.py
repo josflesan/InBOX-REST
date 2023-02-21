@@ -1,7 +1,8 @@
 """Blueprint for deliveries endpoint"""
 
-from config import client
+from config import client, CS_URL
 from bson.json_util import dumps
+from bson.objectid import ObjectId
 from flask import Blueprint, jsonify, request
 from marshmallow import Schema, fields, ValidationError
 import json
@@ -9,7 +10,6 @@ import ast
 
 # Define Delivery Schema used for validation
 class DeliverySchema(Schema):
-    deliveryId = fields.String(required=True)
     hashCode = fields.String(required=True)
     userId = fields.String(required=True)
 
@@ -39,7 +39,7 @@ def get_delivery(delivery_id):
 
     try:
         # Try to fetch the delivery with this id
-        delivery_fetched = collection.find_one({ "deliveryId": delivery_id })
+        delivery_fetched = collection.find_one({ "_id": ObjectId(delivery_id) })
 
         if delivery_fetched:
             return dumps(delivery_fetched)
@@ -59,8 +59,8 @@ def toggle_scanned(delivery_id):
     """
 
     try:
-        delivery = collection.find_one({"deliveryId": delivery_id})
-        update = collection.update_one({"deliveryId": delivery_id}, {"$set": { "scanned": not delivery['scanned'] }})
+        delivery = collection.find_one({"_id": ObjectId(delivery_id)})
+        update = collection.update_one({"_id": ObjectId(delivery_id)}, {"$set": { "scanned": not delivery['scanned'] }})
 
         if update:
             return f"Delivery {delivery_id} set to {not delivery['scanned']}", 201
@@ -91,6 +91,7 @@ def create_delivery():
             # Add scanned and delivered flags
             body['scanned'] = False
             body['delivered'] = False
+
         except ValidationError as err:
             # Report validation error to the user
             return jsonify(err.messages), 400
@@ -99,6 +100,10 @@ def create_delivery():
             return "Bad Request", 400        
 
         record_created = collection.insert_one(body)
+
+        # Add courier service URL for this delivery
+        recordUrl = CS_URL + f"/?id={record_created.inserted_id}"
+        collection.update_one({"_id": record_created.inserted_id}, {"$set": {"url": recordUrl}})
 
         # Prepare the response
         if isinstance(record_created, list):
