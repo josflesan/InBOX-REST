@@ -1,5 +1,6 @@
 import pytest
 import os
+import requests
 
 def pytest_addoption(parser):
     # Ability to test API on different hosts
