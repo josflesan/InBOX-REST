@@ -1,4 +1,5 @@
 flask
+marshmallow
 
 # testing
 pytest

@@ -3,8 +3,15 @@
 from config import client
 from bson.json_util import dumps
 from flask import Blueprint, jsonify, request
+from marshmallow import Schema, fields, ValidationError
 import json
 import ast
+
+# Define Delivery Schema used for validation
+class DeliverySchema(Schema):
+    deliveryId = fields.String(required=True)
+    hashCode = fields.String(required=True)
+    userId = fields.String(required=True)
 
 # Define the blueprint
 blueprint_deliveries = Blueprint(name="blueprint_deliveries", import_name=__name__)
@@ -17,6 +24,9 @@ collection = db.deliveries
 # Test endpoint
 @blueprint_deliveries.route('/test', methods=['GET'])
 def test():
+    """
+    Test endpoint to ping REST-API
+    """
     output = {"msg": "I'm the test endpoint from blueprint_deliveries"}
     return jsonify(output)
 
@@ -30,7 +40,6 @@ def get_delivery(delivery_id):
     try:
         # Try to fetch the delivery with this id
         delivery_fetched = collection.find_one({ "deliveryId": delivery_id })
-        print(collection)
 
         if delivery_fetched:
             return dumps(delivery_fetched)
@@ -42,10 +51,25 @@ def get_delivery(delivery_id):
         # Error while trying to fetch the delivery
         return "The delivery could not be fetched", 500
 
-# Set scanned flag to true
+# Toggle scanned value
 @blueprint_deliveries.route('/<delivery_id>', methods=['PUT'])
-def update_scanned(delivery_id):
-    pass
+def toggle_scanned(delivery_id):
+    """
+    Function that updates the scanned flag of a delivery record (true/false)
+    """
+
+    try:
+        delivery = collection.find_one({"deliveryId": delivery_id})
+        update = collection.update_one({"deliveryId": delivery_id}, {"$set": { "scanned": not delivery['scanned'] }})
+
+        if update:
+            return f"Delivery {delivery_id} set to {not delivery['scanned']}", 201
+        else:
+            return "The delivery could not be found", 404
+
+    except:
+        # Error while trying to update the resource
+        return "Could not update the delivery", 500
 
 # Create delivery function
 @blueprint_deliveries.route('/', methods=['POST'])
@@ -54,14 +78,27 @@ def create_delivery():
     Function that creates a new delivery object
     """
 
+    # Get Request body from JSON
+    request_data = request.json
+    schema = DeliverySchema()  # Assign delivery schema
+
     try:
         try:
             body = ast.literal_eval(json.dumps(request.get_json()))
+            # Validate request body against schema data types
+            schema.load(request_data)
+
+            # Add scanned and delivered flags
+            body['scanned'] = False
+            body['delivered'] = False
+        except ValidationError as err:
+            # Report validation error to the user
+            return jsonify(err.messages), 400
         except:
             # Bad request as request body is not available
-            return "Bad Request", 400
-        
-        record_created = collection.insert(body)
+            return "Bad Request", 400        
+
+        record_created = collection.insert_one(body)
 
         # Prepare the response
         if isinstance(record_created, list):
