@@ -6,6 +6,7 @@ from bson.objectid import ObjectId
 from flask import Blueprint, jsonify, request
 from marshmallow import Schema, fields, ValidationError
 import json
+import time
 import ast
 
 # Define Delivery Schema used for validation
@@ -70,6 +71,27 @@ def toggle_scanned(delivery_id):
     except:
         # Error while trying to update the resource
         return "Could not update the delivery", 500
+
+# Long Poll call for navigation in courier-service
+@blueprint_deliveries.route('/<delivery_id>/poll', methods=['GET'])
+def poll_scanned(delivery_id):
+    """
+    Function to long poll the scanned flag in the record
+    """
+
+    try:
+        # Poll the database
+        while True:
+            time.sleep(0.5)
+            scannedValue = collection.find_one({"_id": ObjectId(delivery_id)})['scanned']
+
+            if scannedValue:
+                return "Scanned", 201
+
+    except:
+        # Error while trying to poll the database
+        return "Polling failed", 500
+
 
 # Create delivery function
 @blueprint_deliveries.route('/', methods=['POST'])
