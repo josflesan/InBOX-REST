@@ -16,6 +16,13 @@ def test_deliveries_get(api_v1_host):
     json = response.json()
     assert json['hashCode'] == "averysecurehash"
 
+def test_deliveries_check_hash(api_v1_host):
+    endpoint = os.path.join(api_v1_host, 'deliveries', '63f52275b2422530719ec323', 'averysecurehash')
+    response = requests.get(endpoint)
+    assert response.status_code == 201
+    json = response.json()
+    assert json['result']
+
 def test_deliveries_toggle_scanned(api_v1_host):
     endpoint = os.path.join(api_v1_host, 'deliveries', '63f52275b2422530719ec323')
     response = requests.put(endpoint)

@@ -52,6 +52,23 @@ def get_delivery(delivery_id):
         # Error while trying to fetch the delivery
         return "The delivery could not be fetched", 500
 
+# Verify hash value
+@blueprint_deliveries.route('/<delivery_id>/<hash_code>', methods=['GET'])
+def check_hash(delivery_id, hash_code):
+    """
+    Function that checks whether a hash code matches with a given delivery
+    """
+
+    try:
+        delivery = collection.find_one({"_id": ObjectId(delivery_id)})
+
+        return dumps({"result": delivery['hashCode'] == hash_code}), 201
+
+    except:
+        # The delivery could not be retrieved
+        return f"The delivery with id {delivery_id} could not be accessed", 500
+
+
 # Toggle scanned value
 @blueprint_deliveries.route('/<delivery_id>', methods=['PUT'])
 def toggle_scanned(delivery_id):
