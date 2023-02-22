@@ -66,7 +66,11 @@ def check_hash(delivery_id, hash_code):
     try:
         delivery = collection.find_one({"_id": ObjectId(delivery_id)})
 
-        return dumps({"result": delivery['hashCode'] == hash_code}), 201
+        if delivery['hashCode'] == hash_code:
+            collection.update_one({"_id": ObjectId(delivery_id)}, {"$set": {"scanned": True}})
+            return dumps({"result": True}), 201
+
+        return dumps({"result": False}), 201
 
     except:
         # The delivery could not be retrieved
