@@ -67,6 +67,7 @@ def check_hash(delivery_id, hash_code):
         delivery = collection.find_one({"_id": ObjectId(delivery_id)})
 
         if delivery['hashCode'] == hash_code:
+            # Update scanned flags
             collection.update_one({"_id": ObjectId(delivery_id)}, {"$set": {"scanned": True}})
             return dumps({"result": True}), 201
 
@@ -118,6 +119,23 @@ def poll_scanned(delivery_id):
     except:
         # Error while trying to poll the database
         return "Polling failed", 500
+
+# Endpoint to update delivered status
+@blueprint_deliveries.route('/<delivery_id>/delivered', methods=['GET'])
+@cross_origin()
+def update_delived(delivery_id):
+    """
+    Function that updates the delivered status on a delivery
+    """
+
+    try:
+        # Update the delivery flag
+        collection.update_one({"_id": ObjectId(delivery_id)}, {"$set": {"delivered": True}})
+        return dumps({"success": True}), 201
+
+    except:
+        # The delivery could not be obtained or updated
+        return "The delivery was not found", 500
 
 
 # Create delivery function
