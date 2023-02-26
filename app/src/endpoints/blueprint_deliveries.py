@@ -7,6 +7,7 @@ from flask import Blueprint, jsonify, request
 from flask_cors import cross_origin
 from marshmallow import Schema, fields, ValidationError
 import json
+import requests
 import time
 import ast
 
@@ -114,7 +115,7 @@ def poll_scanned(delivery_id):
             scannedValue = collection.find_one({"_id": ObjectId(delivery_id)})['scanned']
 
             if scannedValue:
-                return "Scanned", 201
+                return dumps({"result": "Scanned"}), 201
 
     except:
         # Error while trying to poll the database
@@ -131,12 +132,55 @@ def update_delived(delivery_id):
     try:
         # Update the delivery flag
         collection.update_one({"_id": ObjectId(delivery_id)}, {"$set": {"delivered": True}})
-        return dumps({"success": True}), 201
+        return dumps({"result": True}), 201
 
     except:
         # The delivery could not be obtained or updated
         return "The delivery was not found", 500
 
+# Upload image endpoint
+@blueprint_deliveries.route('/<delivery_id>/image', methods=['POST'])
+@cross_origin()
+def upload_image(delivery_id):
+    """
+    Function that uploads image from byte array to MongoDB
+    """
+
+    try:
+        # Get base 64 string from request data
+        body = ast.literal_eval(json.dumps(request.get_json()))
+        base64Image = body['base64Image']
+
+        # Upload base64 image to the database
+        collection.update_one({"_id": ObjectId(delivery_id)}, {"$set" : {"imageProof": base64Image}})
+        return dumps({"result": True}), 201
+
+    except:
+        # The image could not be uploaded
+        return dumps({"result": False}), 500
+
+# Retrieve image endpoint
+@blueprint_deliveries.route('/<delivery_id>/image', methods=["GET"])
+@cross_origin()
+def get_image(delivery_id):
+    """
+    Function to obtain the base64 image of the delivery proof photo submitted
+    """
+
+    try:
+        # Try obtaining the delivery specified
+        delivery = collection.find_one({"_id": ObjectId(delivery_id)})
+
+        # If a delivery image proof exists, return it
+        if 'imageProof' in delivery:
+            return dumps({"result": delivery["imageProof"]}), 201
+
+        # Otherwise, fail gracefully
+        return dumps({"result": None}), 201
+
+    except:
+        # If any error occurs, fail
+        return "The delivery could not be found", 500
 
 # Create delivery function
 @blueprint_deliveries.route('/', methods=['POST'])
@@ -184,4 +228,28 @@ def create_delivery():
     except:
         # Error while trying to create the resource
         return "Could not create a delivery", 500
+
+
+# Delete delivery function
+@blueprint_deliveries.route('/<delivery_id>', methods=["DELETE"])
+@cross_origin()
+def delete_delivery(delivery_id):
+    """
+    Function that deletes a delivery from the database
+    """
+
+    try:
+        delivery = collection.find_one({"_id": ObjectId(delivery_id)})
+
+        # Ensure that delivery has been scanned and delivered
+        if not (delivery['scanned'] and delivery['delivered']):
+            return dumps({"result": False}), 201
+
+        # Delete afterwards
+        collection.delete_one({"_id": ObjectId(delivery_id)})
+
+        return dumps({"result": True}), 201
+
+    except:
+        return "The delivery could not be deleted", 500
 

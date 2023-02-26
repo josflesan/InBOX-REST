@@ -1,5 +1,6 @@
 import os
 import requests
+import base64
 
 def test_deliveries_test(api_v1_host):
     endpoint = os.path.join(api_v1_host, 'deliveries', 'test')
@@ -37,7 +38,15 @@ def test_deliveries_update_delivered(api_v1_host):
     endpoint = os.path.join(api_v1_host, 'deliveries', '63f52275b2422530719ec323', 'delivered')
     response = requests.get(endpoint)
     assert response.status_code == 201
-    assert response.json()['success']
+    assert response.json()['result']
+
+def test_deliveries_get_image(api_v1_host):
+    endpoint = os.path.join(api_v1_host, 'deliveries', '63f52275b2422530719ec323', 'image')
+    response = requests.get(endpoint)
+    assert response.status_code == 201
+    image_data = base64.b64decode(response.json()['result'])
+    with open("testImage.png", "wb") as fh:
+        fh.write(image_data)
 
 def test_deliveries_create(api_v1_host):
     endpoint = os.path.join(api_v1_host, 'deliveries')
