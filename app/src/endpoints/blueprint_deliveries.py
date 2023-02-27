@@ -7,7 +7,6 @@ from flask import Blueprint, jsonify, request
 from flask_cors import cross_origin
 from marshmallow import Schema, fields, ValidationError
 import json
-import requests
 import time
 import ast
 
