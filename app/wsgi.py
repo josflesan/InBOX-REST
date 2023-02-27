@@ -3,10 +3,10 @@
 ######################
 # FOR PRODUCTION
 ######################
-from src.app import app
+from src.app import app, socketio
 
 if __name__ == "__main__":
     ##################
     # FOR DEVELOPMENT
     ##################
-    app.run(host='0.0.0.0', debug=True, threaded=True)
+    socketio.run(app)

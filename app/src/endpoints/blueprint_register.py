@@ -45,6 +45,7 @@ def add_user():
             return jsonify({"message": "Bad password or user"}), 401
 
         access_token = create_access_token(identity=body["username"])
+
         return jsonify(access_token=access_token)
 
     except ValidationError as err:
