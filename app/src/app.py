@@ -3,9 +3,10 @@
 # Load libraries
 from datetime import timedelta
 from flask import Flask, jsonify
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 from flask_jwt_extended import JWTManager
-from flask_socketio import SocketIO
+from flask_socketio import SocketIO, emit
+import eventlet
 
 # Load modules
 from src.endpoints.blueprint_deliveries import blueprint_deliveries
@@ -18,7 +19,7 @@ app.config["SECRET_KEY"] = "secret!"  #TODO: Change this
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=30)
 app.config["JWT_SECRET_KEY"] = "super-secret"  #TODO: Change this
 jwt = JWTManager(app)
-socketio = SocketIO(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 app.config['CORS_HEADERS'] = 'Content-Type'
 
 # Register blueprints, ensuring paths are versioned

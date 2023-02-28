@@ -5,11 +5,10 @@ from bson.json_util import dumps
 from bson.objectid import ObjectId
 from flask import Blueprint, jsonify, request
 from flask_cors import cross_origin
+from flask_socketio import emit
 from flask_jwt_extended import jwt_required
 from marshmallow import Schema, fields, ValidationError
-import json
-import time
-import ast
+import json, time, ast
 
 # deliveries endpoints schema
 class DeliverySchema(Schema):
@@ -37,7 +36,6 @@ def test():
 # Get delivery function
 @blueprint_deliveries.route('/<delivery_id>', methods=['GET'])
 @cross_origin()
-@jwt_required()
 def get_delivery(delivery_id):
     """
     Function to retrieve a single delivery record.
@@ -60,7 +58,6 @@ def get_delivery(delivery_id):
 # Verify hash value
 @blueprint_deliveries.route('/<delivery_id>/<hash_code>', methods=['GET'])
 @cross_origin()
-@jwt_required()
 def check_hash(delivery_id, hash_code):
     """
     Function that checks whether a hash code matches with a given delivery
@@ -84,7 +81,6 @@ def check_hash(delivery_id, hash_code):
 # Toggle scanned value
 @blueprint_deliveries.route('/<delivery_id>', methods=['PUT'])
 @cross_origin()
-@jwt_required()
 def toggle_scanned(delivery_id):
     """
     Function that updates the scanned flag of a delivery record (true/false)
@@ -119,6 +115,7 @@ def poll_scanned(delivery_id):
             scannedValue = collection.find_one({"_id": ObjectId(delivery_id)})['scanned']
 
             if scannedValue:
+                # emit(jsonify("scanned", {"result": scannedValue}))
                 return dumps({"result": "Scanned"}), 201
 
     except:
@@ -128,7 +125,6 @@ def poll_scanned(delivery_id):
 # Endpoint to update delivered status
 @blueprint_deliveries.route('/<delivery_id>/delivered', methods=['GET'])
 @cross_origin()
-@jwt_required()
 def update_delived(delivery_id):
     """
     Function that updates the delivered status on a delivery
@@ -146,7 +142,6 @@ def update_delived(delivery_id):
 # Upload image endpoint
 @blueprint_deliveries.route('/<delivery_id>/image', methods=['POST'])
 @cross_origin()
-@jwt_required()
 def upload_image(delivery_id):
     """
     Function that uploads image from byte array to MongoDB
