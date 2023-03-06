@@ -75,7 +75,7 @@ def check_hash(delivery_id, hash_code):
 
     except:
         # The delivery could not be retrieved
-        return f"The delivery with id {delivery_id} could not be accessed", 500
+        return dumps({"err": f"The delivery with id {delivery_id} could not be found"}), 401
 
 
 # Toggle scanned value
@@ -88,7 +88,7 @@ def toggle_scanned(delivery_id):
 
     try:
         delivery = collection.find_one({"_id": ObjectId(delivery_id)})
-        update = collection.update_one({"_id": ObjectId(delivery_id)}, {"$set": { "scanned": not delivery['scanned'] }})
+        update = collection.update_one({"_id": ObjectId(delivery_id)}, {"$set": { "scanned": True }})
 
         if update:
             return f"Delivery {delivery_id} set to {not delivery['scanned']}", 201
@@ -102,7 +102,6 @@ def toggle_scanned(delivery_id):
 # Long Poll call for navigation in courier-service
 @blueprint_deliveries.route('/<delivery_id>/poll', methods=['GET'])
 @cross_origin()
-@jwt_required()
 def poll_scanned(delivery_id):
     """
     Function to long poll the scanned flag in the record
