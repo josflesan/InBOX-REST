@@ -1,6 +1,6 @@
 """Blueprint for deliveries endpoint"""
 
-from config import client, CS_URL
+from config import Config
 from bson.json_util import dumps
 from bson.objectid import ObjectId
 from flask import Blueprint, jsonify, request
@@ -19,7 +19,7 @@ class DeliverySchema(Schema):
 blueprint_deliveries = Blueprint(name="blueprint_deliveries", import_name=__name__)
 
 # Select the database
-db = client.inbox
+db = Config.DATABASE_CLIENT.inbox
 # Select the collection
 collection = db.deliveries
 
@@ -216,7 +216,7 @@ def create_delivery():
         record_created = collection.insert_one(body)
 
         # Add courier service URL for this delivery
-        recordUrl = CS_URL + f"/?id={record_created.inserted_id}"
+        recordUrl = Config.CS_URL + f"/?id={record_created.inserted_id}"  #TODO: Change this before production
         collection.update_one({"_id": record_created.inserted_id}, {"$set": {"url": recordUrl}})
 
         # Prepare the response

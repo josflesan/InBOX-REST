@@ -1,8 +1,9 @@
 """ Blueprint for users endpoint """
 
-from config import client
+from config import Config
 from flask import Blueprint, jsonify, request
 from flask_login import *
+from flask_bcrypt import *
 from flask_cors import cross_origin
 from flask_socketio import emit
 from flask_jwt_extended import jwt_required
@@ -20,7 +21,7 @@ class NewUser(Schema):
 blueprint_users = Blueprint(name="blueprint_users", import_name=__name__)
 
 # Select the database and the collection
-db = client.inbox
+db = Config.DATABASE_CLIENT.inbox
 collection = db.users
 
 # Test endpoint for Users
