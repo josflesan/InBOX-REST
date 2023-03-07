@@ -1,14 +1,13 @@
 """ Blueprint for users endpoint """
 
 from config import Config
-from src.decorators.access_control import AccessControl, User
+from src.decorators.access_control import AccessControl
 from bson import json_util
 from bson.objectid import ObjectId
 from flask import Blueprint, jsonify, request
 from flask_cors import cross_origin
 from flask_socketio import emit
 from jwt import encode
-# from flask_jwt_extended import jwt_required, create_access_token, get_jwt_identity
 from marshmallow import Schema, fields, ValidationError
 import json, ast, bcrypt, datetime
 
@@ -76,7 +75,7 @@ def login():
         elif not authenticate(body["username"], body["password"], user):
             return jsonify({"result": False, "err": "The credentials are invalid"}), 401
         
-        token = encode({"user": body["username"], "role": user["role"], "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=24)}, Config.SECRET_KEY)
+        token = encode({"user_id": user["hashID"], "role": user["role"], "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=24)}, Config.SECRET_KEY)
         collection.update_one({"username": body["username"]}, {"$set": {"active": True}})  # Set active flag
         return jsonify({"token": token}), 201
     
@@ -103,10 +102,10 @@ def logout(username: str):
 
 
 # Endpoint to get and update users
-@blueprint_users.route('/<username>', methods=["POST", "PUT"])
+@blueprint_users.route('/query', methods=["POST", "PUT"])
 @cross_origin()
-@AccessControl.token_required
-def user_query(username: str):
+@AccessControl.is_self_or_admin  # Regualr users should only be able to alter their own profiles
+def user_query():
     """
     Method that retrieves or updates a single user in the database (used for profile screen)
 
@@ -115,8 +114,8 @@ def user_query(username: str):
     """
 
     try:
-
-        user = collection.find_one({"username": username})
+        body = ast.literal_eval(json.dumps(request.get_json()))
+        user = collection.find_one({"username": body["username"]})
         if request.method == "POST":
             # Get a user from the database (only user can retrieve their details)
             return json.loads(json_util.dumps(user)), 201
@@ -129,7 +128,7 @@ def user_query(username: str):
             UserUpdate().load(request.json)
             for key in body["updates"].keys():
                 if key in ["active", "role", "_id"]:
-                    return jsonify({"result": False, "err": "Access denied"})
+                    return jsonify({"result": False, "err": "Access denied"}), 401
                 elif key in user:
                     updates[key] = body["updates"][key]
 
@@ -172,6 +171,7 @@ def create_user():
             "password": hashedPass,
             "email": body["email"],
             "active": True,
+            "hashID": abs(hash(body["username"])),
             "role": "user"
         })
 
@@ -208,10 +208,10 @@ def elevate_privileges(username: str):
 
 
 # Endpoint to delete user
-@blueprint_users.route('/delete/<username>', methods=["GET"])
+@blueprint_users.route('/delete', methods=["POST"])
 @cross_origin()
-@AccessControl.token_required
-def delete_user(username: str):
+@AccessControl.is_self_or_admin
+def delete_user():
     """
     Method that deletes a user from the database
 
@@ -219,7 +219,9 @@ def delete_user(username: str):
         - username (str): the user account's username
     """
     try:
+        body = ast.literal_eval(json.dumps(request.get_json()))
         # Try finding the user in the database and delete if found
+        username = body["username"]
         user = collection.find_one_and_delete({"username": username})
 
         if not user:

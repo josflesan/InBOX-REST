@@ -1,12 +1,12 @@
 """Blueprint for deliveries endpoint"""
 
 from config import Config
+from src.decorators.access_control import AccessControl
 from bson.json_util import dumps
 from bson.objectid import ObjectId
 from flask import Blueprint, jsonify, request
 from flask_cors import cross_origin
 from flask_socketio import emit
-from flask_jwt_extended import jwt_required
 from marshmallow import Schema, fields, ValidationError
 import json, time, ast
 
@@ -162,7 +162,7 @@ def upload_image(delivery_id):
 # Retrieve image endpoint
 @blueprint_deliveries.route('/<delivery_id>/image', methods=["GET"])
 @cross_origin()
-@jwt_required()
+@AccessControl.is_self_or_admin
 def get_image(delivery_id):
     """
     Function to obtain the base64 image of the delivery proof photo submitted
@@ -179,13 +179,14 @@ def get_image(delivery_id):
         # Otherwise, fail gracefully
         return dumps({"result": None}), 201
 
-    except:
+    except Exception as err:
         # If any error occurs, fail
-        return "The delivery could not be found", 500
+        return jsonify({"err": f"Internal Server Error: {err}"}), 500
 
 # Create delivery function
 @blueprint_deliveries.route('/', methods=['POST'])
 @cross_origin()
+@AccessControl.is_self_or_admin
 def create_delivery():
     """
     Function that creates a new delivery object
@@ -207,33 +208,34 @@ def create_delivery():
 
         except ValidationError as err:
             # Report validation error to the user
-            return jsonify(err.messages), 400
+            return jsonify({"err": f"{err.messages}"}), 400
         except:
             # Bad request as request body is not available
-            return "Bad Request", 400        
+            return jsonify({"err": "Bad Request"}), 400
 
         record_created = collection.insert_one(body)
 
         # Add courier service URL for this delivery
-        recordUrl = Config.CS_URL + f"/?id={record_created.inserted_id}"  #TODO: Change this before production
+        recordUrl = Config.CS_URL + f"?id={record_created.inserted_id}"
         collection.update_one({"_id": record_created.inserted_id}, {"$set": {"url": recordUrl}})
 
         # Prepare the response
         if isinstance(record_created, list):
             # Return list of Id of newly created items
-            return jsonify([str(v) for v in record_created]), 201
+            return jsonify({str(k): str(v)  for k, v in record_created.items()}), 201
         else:
             # Return Id of newly created item
-            return jsonify(str(record_created)), 201
+            return jsonify({"result": str(record_created)}), 201
     
-    except:
+    except Exception as err:
         # Error while trying to create the resource
-        return "Could not create a delivery", 500
+        return jsonify({"err": f"Could not create the delivery: {err}"}), 500
 
 
 # Delete delivery function
 @blueprint_deliveries.route('/<delivery_id>', methods=["DELETE"])
 @cross_origin()
+@AccessControl.is_self_or_admin
 def delete_delivery(delivery_id):
     """
     Function that deletes a delivery from the database
