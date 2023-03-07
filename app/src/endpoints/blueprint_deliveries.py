@@ -186,7 +186,6 @@ def get_image(delivery_id):
 # Create delivery function
 @blueprint_deliveries.route('/', methods=['POST'])
 @cross_origin()
-@jwt_required()
 def create_delivery():
     """
     Function that creates a new delivery object
@@ -235,7 +234,6 @@ def create_delivery():
 # Delete delivery function
 @blueprint_deliveries.route('/<delivery_id>', methods=["DELETE"])
 @cross_origin()
-@jwt_required()
 def delete_delivery(delivery_id):
     """
     Function that deletes a delivery from the database

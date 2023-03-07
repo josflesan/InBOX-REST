@@ -5,6 +5,8 @@ from flask import Flask, jsonify
 from flask_cors import CORS, cross_origin
 from flask_jwt_extended import JWTManager
 from flask_socketio import SocketIO, emit
+from flask_bcrypt import Bcrypt
+from flask_praetorian import Praetorian
 from config import Config
 
 # Load modules
@@ -15,6 +17,7 @@ from src.endpoints.blueprint_register import blueprint_register  #TODO: probably
 # Initialize Flask app
 app = Flask(__name__)
 app.config.from_object(Config)
+bcrypt = Bcrypt(app)  #TODO: likely change this
 cors = CORS(app, resources={r"/*": {"origins": "*"}})
 jwt = JWTManager(app)
 socketio = SocketIO(app, cors_allowed_origins="*")

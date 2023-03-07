@@ -7,6 +7,8 @@ class Config(object):
     DEBUG = True
     SECRET_KEY = "secret!"  #TODO: Change this
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(days=30)
+    JWT_ACCESS_LIFESPAN = {"hours": 24}
+    JWT_REFRESH_LIFESPAN = {"days": 30}
     JWT_SECRET_KEY = "super secret"  #TODO: Change this
     CORS_HEADERS = 'Content-Type'
     DATABASE = MongoClient()['inbox']
