@@ -37,5 +37,28 @@ class AccessControl:
             return func(*args, **kwargs)
         
         return decorated
+    
+    @staticmethod
+    def is_admin(func):
+        @wraps(func)
+        def decorator(*args, **kwargs):
+
+            token = request.headers.get('Authorization').split()[1]
+
+            if not token:
+                return jsonify({"err": "The token is missing! Please log in again"}), 401
             
+            try:
+                decoded_key = decode(token, Config.SECRET_KEY, algorithms=["HS256"])
+
+                if not decoded_key["role"] == "admin":
+                    return jsonify({"err": "You do not have permissions to access this endpoint"}), 401
+                
+            except Exception as err:
+                return jsonify({"err": f"Internal server error: {err}"})
+
+
+            return func(*args, **kwargs)
+        
+        return decorator
 

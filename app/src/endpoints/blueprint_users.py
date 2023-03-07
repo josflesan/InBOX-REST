@@ -185,7 +185,7 @@ def create_user():
 # Endpoint to make a user an administrator
 @blueprint_users.route('/elevate/<username>', methods=["GET"])
 @cross_origin()
-@AccessControl.token_required
+@AccessControl.is_admin
 def elevate_privileges(username: str):
     """
     Method that elevates a user's privileges. Can only be called by someone

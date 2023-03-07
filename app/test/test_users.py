@@ -60,8 +60,16 @@ def test_user_logout(api_v1_host):
     json = response.json()
     assert json['result']
 
-def test_user_elevate(api_v1_host, api_key):
+def test_user_elevate(api_v1_host):
+    # Login with admin account
+    endpoint = os.path.join(api_v1_host, 'users', 'login')
+    response = requests.post(endpoint, json={"username": "anadminaccount", "password": "suchasecurepassword"})
+    assert response.status_code == 201
+
+    admin_api_key = response.json()["token"]
+
+    # Make request using admin account
     endpoint = os.path.join(api_v1_host, 'users', 'elevate', 'testuser')
-    response = requests.get(endpoint, headers={"Authorization": f"Bearer {API_TOKEN}"})
+    response = requests.get(endpoint, headers={"Authorization": f"Bearer {admin_api_key}"})
     assert response.status_code == 201
     assert response.json()["result"]
