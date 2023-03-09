@@ -1,26 +1,27 @@
 """Blueprint for deliveries endpoint"""
 
-from config import client, CS_URL
-from bson.json_util import dumps
+from config import Config
+from src.decorators.access_control import AccessControl
 from bson.objectid import ObjectId
+from bson.json_util import dumps
 from flask import Blueprint, jsonify, request
 from flask_cors import cross_origin
-from flask_jwt_extended import jwt_required
+from flask_socketio import emit
 from marshmallow import Schema, fields, ValidationError
-import json
-import time
-import ast
+import json, time, ast
 
 # deliveries endpoints schema
 class DeliverySchema(Schema):
     hashCode = fields.String(required=True)
     userId = fields.String(required=True)
+    email = fields.String(required=False)
+    username = fields.String(required=False)
 
 # Define the blueprint
 blueprint_deliveries = Blueprint(name="blueprint_deliveries", import_name=__name__)
 
 # Select the database
-db = client.inbox
+db = Config.DATABASE_CLIENT.inbox
 # Select the collection
 collection = db.deliveries
 
@@ -37,7 +38,6 @@ def test():
 # Get delivery function
 @blueprint_deliveries.route('/<delivery_id>', methods=['GET'])
 @cross_origin()
-@jwt_required()
 def get_delivery(delivery_id):
     """
     Function to retrieve a single delivery record.
@@ -51,16 +51,15 @@ def get_delivery(delivery_id):
             return dumps(delivery_fetched)
         else:
             # No delivery was found
-            return "No delivery was found", 404
+            return "No delivery was not found", 404
 
-    except:
+    except Exception as err:
         # Error while trying to fetch the delivery
-        return "The delivery could not be fetched", 500
+        return jsonify({"err": f"Internal Server Error: {err}"}), 500
 
 # Verify hash value
 @blueprint_deliveries.route('/<delivery_id>/<hash_code>', methods=['GET'])
 @cross_origin()
-@jwt_required()
 def check_hash(delivery_id, hash_code):
     """
     Function that checks whether a hash code matches with a given delivery
@@ -72,19 +71,18 @@ def check_hash(delivery_id, hash_code):
         if delivery['hashCode'] == hash_code:
             # Update scanned flags
             collection.update_one({"_id": ObjectId(delivery_id)}, {"$set": {"scanned": True}})
-            return dumps({"result": True}), 201
+            return jsonify({"result": True}), 201
 
-        return dumps({"result": False}), 201
+        return jsonify({"result": False}), 201
 
     except:
         # The delivery could not be retrieved
-        return f"The delivery with id {delivery_id} could not be accessed", 500
+        return jsonify({"err": f"The delivery with id {delivery_id} could not be found"}), 401
 
 
 # Toggle scanned value
 @blueprint_deliveries.route('/<delivery_id>', methods=['PUT'])
 @cross_origin()
-@jwt_required()
 def toggle_scanned(delivery_id):
     """
     Function that updates the scanned flag of a delivery record (true/false)
@@ -92,7 +90,7 @@ def toggle_scanned(delivery_id):
 
     try:
         delivery = collection.find_one({"_id": ObjectId(delivery_id)})
-        update = collection.update_one({"_id": ObjectId(delivery_id)}, {"$set": { "scanned": not delivery['scanned'] }})
+        update = collection.update_one({"_id": ObjectId(delivery_id)}, {"$set": { "scanned": True }})
 
         if update:
             return f"Delivery {delivery_id} set to {not delivery['scanned']}", 201
@@ -106,7 +104,6 @@ def toggle_scanned(delivery_id):
 # Long Poll call for navigation in courier-service
 @blueprint_deliveries.route('/<delivery_id>/poll', methods=['GET'])
 @cross_origin()
-@jwt_required()
 def poll_scanned(delivery_id):
     """
     Function to long poll the scanned flag in the record
@@ -119,7 +116,8 @@ def poll_scanned(delivery_id):
             scannedValue = collection.find_one({"_id": ObjectId(delivery_id)})['scanned']
 
             if scannedValue:
-                return dumps({"result": "Scanned"}), 201
+                # emit(jsonify("scanned", {"result": scannedValue}))
+                return jsonify({"result": "Scanned"}), 201
 
     except:
         # Error while trying to poll the database
@@ -128,7 +126,6 @@ def poll_scanned(delivery_id):
 # Endpoint to update delivered status
 @blueprint_deliveries.route('/<delivery_id>/delivered', methods=['GET'])
 @cross_origin()
-@jwt_required()
 def update_delived(delivery_id):
     """
     Function that updates the delivered status on a delivery
@@ -137,7 +134,7 @@ def update_delived(delivery_id):
     try:
         # Update the delivery flag
         collection.update_one({"_id": ObjectId(delivery_id)}, {"$set": {"delivered": True}})
-        return dumps({"result": True}), 201
+        return jsonify({"result": True}), 201
 
     except:
         # The delivery could not be obtained or updated
@@ -146,7 +143,6 @@ def update_delived(delivery_id):
 # Upload image endpoint
 @blueprint_deliveries.route('/<delivery_id>/image', methods=['POST'])
 @cross_origin()
-@jwt_required()
 def upload_image(delivery_id):
     """
     Function that uploads image from byte array to MongoDB
@@ -159,16 +155,16 @@ def upload_image(delivery_id):
 
         # Upload base64 image to the database
         collection.update_one({"_id": ObjectId(delivery_id)}, {"$set" : {"imageProof": base64Image}})
-        return dumps({"result": True}), 201
+        return jsonify({"result": True}), 201
 
     except:
         # The image could not be uploaded
-        return dumps({"result": False}), 500
+        return jsonify({"result": False}), 500
 
 # Retrieve image endpoint
-@blueprint_deliveries.route('/<delivery_id>/image', methods=["GET"])
+@blueprint_deliveries.route('/image/<delivery_id>', methods=["POST"])
 @cross_origin()
-@jwt_required()
+@AccessControl.is_self_or_admin
 def get_image(delivery_id):
     """
     Function to obtain the base64 image of the delivery proof photo submitted
@@ -180,19 +176,19 @@ def get_image(delivery_id):
 
         # If a delivery image proof exists, return it
         if 'imageProof' in delivery:
-            return dumps({"result": delivery["imageProof"]}), 201
+            return jsonify({"result": delivery["imageProof"]}), 201
 
         # Otherwise, fail gracefully
-        return dumps({"result": None}), 201
+        return jsonify({"err": f"The image proof could not be obtained"}), 201
 
-    except:
+    except Exception as err:
         # If any error occurs, fail
-        return "The delivery could not be found", 500
+        return jsonify({"err": f"Internal Server Error: {err}"}), 500
 
 # Create delivery function
-@blueprint_deliveries.route('/', methods=['POST'])
+@blueprint_deliveries.route('/create', methods=['POST'])
 @cross_origin()
-@jwt_required()
+@AccessControl.is_self_or_admin
 def create_delivery():
     """
     Function that creates a new delivery object
@@ -214,34 +210,34 @@ def create_delivery():
 
         except ValidationError as err:
             # Report validation error to the user
-            return jsonify(err.messages), 400
-        except:
+            return jsonify({"err": f"{err.messages}"}), 400
+        except Exception as err:
             # Bad request as request body is not available
-            return "Bad Request", 400        
+            return jsonify({"err": f"Internal Server Error: {err}"}), 400
 
         record_created = collection.insert_one(body)
 
         # Add courier service URL for this delivery
-        recordUrl = CS_URL + f"/?id={record_created.inserted_id}"
+        recordUrl = Config.CS_URL + f"?id={record_created.inserted_id}"
         collection.update_one({"_id": record_created.inserted_id}, {"$set": {"url": recordUrl}})
 
         # Prepare the response
         if isinstance(record_created, list):
             # Return list of Id of newly created items
-            return jsonify([str(v) for v in record_created]), 201
+            return jsonify({str(k): str(v)  for k, v in record_created.items()}), 201
         else:
             # Return Id of newly created item
-            return jsonify(str(record_created)), 201
+            return jsonify({"result": str(record_created)}), 201
     
-    except:
+    except Exception as err:
         # Error while trying to create the resource
-        return "Could not create a delivery", 500
+        return jsonify({"err": f"Could not create the delivery: {err}"}), 500
 
 
 # Delete delivery function
-@blueprint_deliveries.route('/<delivery_id>', methods=["DELETE"])
+@blueprint_deliveries.route('/delete/<delivery_id>', methods=["DELETE"])
 @cross_origin()
-@jwt_required()
+@AccessControl.is_self_or_admin
 def delete_delivery(delivery_id):
     """
     Function that deletes a delivery from the database
@@ -252,12 +248,12 @@ def delete_delivery(delivery_id):
 
         # Ensure that delivery has been scanned and delivered
         if not (delivery['scanned'] and delivery['delivered']):
-            return dumps({"result": False}), 201
+            return jsonify({"result": False}), 201
 
         # Delete afterwards
         collection.delete_one({"_id": ObjectId(delivery_id)})
 
-        return dumps({"result": True}), 201
+        return jsonify({"result": True}), 201
 
     except:
         return "The delivery could not be deleted", 500

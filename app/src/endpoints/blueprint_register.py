@@ -1,6 +1,6 @@
 """ Blueprint for registration endpoints """
 
-from config import client
+from config import Config
 from flask import Blueprint, request, jsonify
 from flask_cors import cross_origin
 from flask_jwt_extended import jwt_required, create_access_token, get_jwt_identity
@@ -17,7 +17,7 @@ class APIUserSchema(Schema):
 blueprint_register = Blueprint(name="blueprint_register", import_name=__name__)
 
 # Select the database and devices collection
-db = client.inbox
+db = Config.DATABASE_CLIENT.inbox
 collection = db.api_users
 
 # Endpoint to register a new device
@@ -45,6 +45,7 @@ def add_user():
             return jsonify({"message": "Bad password or user"}), 401
 
         access_token = create_access_token(identity=body["username"])
+
         return jsonify(access_token=access_token)
 
     except ValidationError as err:
