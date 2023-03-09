@@ -3,6 +3,7 @@
 from config import Config
 from src.decorators.access_control import AccessControl
 from bson.objectid import ObjectId
+from bson.json_util import dumps
 from flask import Blueprint, jsonify, request
 from flask_cors import cross_origin
 from flask_socketio import emit
@@ -13,6 +14,7 @@ import json, time, ast
 class DeliverySchema(Schema):
     hashCode = fields.String(required=True)
     userId = fields.String(required=True)
+    email = fields.String(required=False)
     username = fields.String(required=False)
 
 # Define the blueprint
@@ -46,14 +48,14 @@ def get_delivery(delivery_id):
         delivery_fetched = collection.find_one({ "_id": ObjectId(delivery_id) })
 
         if delivery_fetched:
-            return jsonify(delivery_fetched)
+            return dumps(delivery_fetched)
         else:
             # No delivery was found
-            return "No delivery was found", 404
+            return "No delivery was not found", 404
 
-    except:
+    except Exception as err:
         # Error while trying to fetch the delivery
-        return "The delivery could not be fetched", 500
+        return jsonify({"err": f"Internal Server Error: {err}"}), 500
 
 # Verify hash value
 @blueprint_deliveries.route('/<delivery_id>/<hash_code>', methods=['GET'])
@@ -148,7 +150,7 @@ def upload_image(delivery_id):
 
     try:
         # Get base 64 string from request data
-        body = ast.literal_eval(json.jsonify(request.get_json()))
+        body = ast.literal_eval(json.dumps(request.get_json()))
         base64Image = body['base64Image']
 
         # Upload base64 image to the database
@@ -198,7 +200,7 @@ def create_delivery():
 
     try:
         try:
-            body = ast.literal_eval(json.jsonify(request.get_json()))
+            body = ast.literal_eval(json.dumps(request.get_json()))
             # Validate request body against schema data types
             schema.load(request_data)
 
@@ -209,9 +211,9 @@ def create_delivery():
         except ValidationError as err:
             # Report validation error to the user
             return jsonify({"err": f"{err.messages}"}), 400
-        except:
+        except Exception as err:
             # Bad request as request body is not available
-            return jsonify({"err": "Bad Request"}), 400
+            return jsonify({"err": f"Internal Server Error: {err}"}), 400
 
         record_created = collection.insert_one(body)
 

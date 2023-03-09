@@ -2,15 +2,14 @@
 
 from config import Config
 from flask import jsonify, request
-from bson.objectid import ObjectId
-from marshmallow import ValidationError, Schema, fields
+from marshmallow import Schema, fields
 from jwt import decode
 from functools import wraps
-import ast, json, bcrypt
+import ast, json
 
 class User(Schema):
-    username = fields.String(required=True)
-    email = fields.String(required=False)
+    username = fields.String(required=False)
+    email = fields.String(required=True)
     password = fields.String(required=True)
     updates = fields.Dict(required=False)
 
@@ -79,7 +78,7 @@ class AccessControl:
 
             token = request.headers.get('Authorization').split()[1]
             body = ast.literal_eval(json.dumps(request.get_json()))
-            user = AccessControl.collection.find_one({"username": body["username"]})
+            user = AccessControl.collection.find_one({"email": body["email"]})
 
             if not token:
                 return jsonify({"err": "The token is missing! Please log in again"}), 401
