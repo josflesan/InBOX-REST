@@ -2,7 +2,6 @@
 
 from config import Config
 from src.decorators.access_control import AccessControl
-from bson.json_util import dumps
 from bson.objectid import ObjectId
 from flask import Blueprint, jsonify, request
 from flask_cors import cross_origin
@@ -14,6 +13,7 @@ import json, time, ast
 class DeliverySchema(Schema):
     hashCode = fields.String(required=True)
     userId = fields.String(required=True)
+    username = fields.String(required=False)
 
 # Define the blueprint
 blueprint_deliveries = Blueprint(name="blueprint_deliveries", import_name=__name__)
@@ -46,7 +46,7 @@ def get_delivery(delivery_id):
         delivery_fetched = collection.find_one({ "_id": ObjectId(delivery_id) })
 
         if delivery_fetched:
-            return dumps(delivery_fetched)
+            return jsonify(delivery_fetched)
         else:
             # No delivery was found
             return "No delivery was found", 404
@@ -69,13 +69,13 @@ def check_hash(delivery_id, hash_code):
         if delivery['hashCode'] == hash_code:
             # Update scanned flags
             collection.update_one({"_id": ObjectId(delivery_id)}, {"$set": {"scanned": True}})
-            return dumps({"result": True}), 201
+            return jsonify({"result": True}), 201
 
-        return dumps({"result": False}), 201
+        return jsonify({"result": False}), 201
 
     except:
         # The delivery could not be retrieved
-        return dumps({"err": f"The delivery with id {delivery_id} could not be found"}), 401
+        return jsonify({"err": f"The delivery with id {delivery_id} could not be found"}), 401
 
 
 # Toggle scanned value
@@ -115,7 +115,7 @@ def poll_scanned(delivery_id):
 
             if scannedValue:
                 # emit(jsonify("scanned", {"result": scannedValue}))
-                return dumps({"result": "Scanned"}), 201
+                return jsonify({"result": "Scanned"}), 201
 
     except:
         # Error while trying to poll the database
@@ -132,7 +132,7 @@ def update_delived(delivery_id):
     try:
         # Update the delivery flag
         collection.update_one({"_id": ObjectId(delivery_id)}, {"$set": {"delivered": True}})
-        return dumps({"result": True}), 201
+        return jsonify({"result": True}), 201
 
     except:
         # The delivery could not be obtained or updated
@@ -148,19 +148,19 @@ def upload_image(delivery_id):
 
     try:
         # Get base 64 string from request data
-        body = ast.literal_eval(json.dumps(request.get_json()))
+        body = ast.literal_eval(json.jsonify(request.get_json()))
         base64Image = body['base64Image']
 
         # Upload base64 image to the database
         collection.update_one({"_id": ObjectId(delivery_id)}, {"$set" : {"imageProof": base64Image}})
-        return dumps({"result": True}), 201
+        return jsonify({"result": True}), 201
 
     except:
         # The image could not be uploaded
-        return dumps({"result": False}), 500
+        return jsonify({"result": False}), 500
 
 # Retrieve image endpoint
-@blueprint_deliveries.route('/<delivery_id>/image', methods=["GET"])
+@blueprint_deliveries.route('/image/<delivery_id>', methods=["POST"])
 @cross_origin()
 @AccessControl.is_self_or_admin
 def get_image(delivery_id):
@@ -174,17 +174,17 @@ def get_image(delivery_id):
 
         # If a delivery image proof exists, return it
         if 'imageProof' in delivery:
-            return dumps({"result": delivery["imageProof"]}), 201
+            return jsonify({"result": delivery["imageProof"]}), 201
 
         # Otherwise, fail gracefully
-        return dumps({"result": None}), 201
+        return jsonify({"err": f"The image proof could not be obtained"}), 201
 
     except Exception as err:
         # If any error occurs, fail
         return jsonify({"err": f"Internal Server Error: {err}"}), 500
 
 # Create delivery function
-@blueprint_deliveries.route('/', methods=['POST'])
+@blueprint_deliveries.route('/create', methods=['POST'])
 @cross_origin()
 @AccessControl.is_self_or_admin
 def create_delivery():
@@ -198,7 +198,7 @@ def create_delivery():
 
     try:
         try:
-            body = ast.literal_eval(json.dumps(request.get_json()))
+            body = ast.literal_eval(json.jsonify(request.get_json()))
             # Validate request body against schema data types
             schema.load(request_data)
 
@@ -233,7 +233,7 @@ def create_delivery():
 
 
 # Delete delivery function
-@blueprint_deliveries.route('/<delivery_id>', methods=["DELETE"])
+@blueprint_deliveries.route('/delete/<delivery_id>', methods=["DELETE"])
 @cross_origin()
 @AccessControl.is_self_or_admin
 def delete_delivery(delivery_id):
@@ -246,12 +246,12 @@ def delete_delivery(delivery_id):
 
         # Ensure that delivery has been scanned and delivered
         if not (delivery['scanned'] and delivery['delivered']):
-            return dumps({"result": False}), 201
+            return jsonify({"result": False}), 201
 
         # Delete afterwards
         collection.delete_one({"_id": ObjectId(delivery_id)})
 
-        return dumps({"result": True}), 201
+        return jsonify({"result": True}), 201
 
     except:
         return "The delivery could not be deleted", 500

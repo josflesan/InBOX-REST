@@ -9,7 +9,9 @@ from flask_cors import cross_origin
 from flask_socketio import emit
 from jwt import encode
 from marshmallow import Schema, fields, ValidationError
-import json, ast, bcrypt, datetime
+from random import randint
+from email.mime.text import MIMEText
+import json, ast, bcrypt, datetime, smtplib, requests
 
 # Define Schema for user update
 class UserUpdate(Schema):
@@ -77,8 +79,15 @@ def login():
         
         token = encode({"user_id": user["hashID"], "role": user["role"], "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=24)}, Config.SECRET_KEY)
         collection.update_one({"username": body["username"]}, {"$set": {"active": True}})  # Set active flag
+
+        endpoint = Config.API_HOST + f"/users/{body['username']}/verification"
+        response = requests.get(endpoint)
+
         return jsonify({"token": token}), 201
     
+    except smtplib.SMTPException as err:
+        return jsonify({"result": False, "err": f"An error occurred when sending the email: {err}"})
+
     except ValidationError as err:
         return jsonify({"result": False, "err": f"{err}"}), 401
 
@@ -100,11 +109,44 @@ def logout(username: str):
     except Exception as err:
         return jsonify({"err": f"An error occurred: {err}"}), 500
 
+# Endpoint to send verification code for 2FA
+@blueprint_users.route('/<username>/verification', methods=["GET"])
+@cross_origin()
+def send_verification(username: str):
+    """
+    Method to send verification code to user
+
+    Parameters:
+        - username (str): the user account's username
+    """
+
+    try:
+        # Generate random 4 digit code for 2FA and store
+        four_digit_code = ''.join([str(randint(0, 9)) for _ in range(0, 4)])
+        collection.update_one({"username": username}, {"$set": {"authentication_code": four_digit_code}})
+
+        # Send email for 2FA
+        msg = MIMEText(f"Here is your authentication code: {four_digit_code}")
+        msg['Subject'] = "InBoX App Authentication"
+        msg['From'] = "inboxsmartparcelbox@gmail.com"
+        msg['To'] = "josue.fle.sanc@gmail.com"  #TODO: Change this to recipient email
+        smtp_server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        smtp_server.login("inboxsmartparcelbox@gmail.com", "tstiwvyxaommgzko")
+        smtp_server.sendmail("inboxsmartparcelbox@gmail.com", "josue.fle.sanc@gmail.com", msg.as_string())
+        smtp_server.quit()
+
+        return jsonify({"result": True}), 201
+    
+    except smtplib.SMTPException as err:
+        return jsonify({"result": False, "err": f"Email could not be sent: {err}"}), 401
+
+    except Exception as err:
+        return jsonify({"err": f"Internal Server Error: {err}"}), 500
 
 # Endpoint to get and update users
 @blueprint_users.route('/query', methods=["POST", "PUT"])
 @cross_origin()
-@AccessControl.is_self_or_admin  # Regualr users should only be able to alter their own profiles
+@AccessControl.is_self_or_admin  # Regular users should only be able to alter their own profiles
 def user_query():
     """
     Method that retrieves or updates a single user in the database (used for profile screen)
@@ -129,6 +171,10 @@ def user_query():
             for key in body["updates"].keys():
                 if key in ["active", "role", "_id"]:
                     return jsonify({"result": False, "err": "Access denied"}), 401
+                elif key == "username" and collection.find_one({"username": body["updates"][key]}):
+                    new_username = body["updates"][key]
+                    return jsonify({"result": False, "err": f"The username {new_username} is already taken"}), 401
+                
                 elif key in user:
                     updates[key] = body["updates"][key]
 
@@ -182,13 +228,40 @@ def create_user():
     except Exception as err:
         return jsonify({"result": False, "err": f"An error occurred: {err}"}), 500
 
+# Endpoint to resolve 2FA
+@blueprint_users.route('/twofactor/<username>/<code>', methods=["GET"])
+@cross_origin()
+@AccessControl.token_required
+def resolve_twofactor(username: str, code: str):
+    """
+    Method that resolves a 2FA prompt, can only be called with valid API key
+
+    Parameters:
+        - username (str): user account username
+        - code (str): 8-digit code sent via email to user
+    """
+
+    try:
+        user = collection.find_one({"username": username})
+
+        if not user:
+            return jsonify({"err": "The user was not found!"}), 401
+        
+        elif user["2fa"] != code:
+            return jsonify({"err": "The code is invalid, please try again!"}), 401
+        
+        return jsonify({"result": True}), 201
+    
+    except Exception as err:
+        return jsonify({"err": f"Internal Server Error: {err}"}), 500
+
 # Endpoint to make a user an administrator
 @blueprint_users.route('/elevate/<username>', methods=["GET"])
 @cross_origin()
 @AccessControl.is_admin
 def elevate_privileges(username: str):
     """
-    Method that elevates a user's privileges. Can only be called by someone
+    Method that elevates a user's privileges. Can only be called by admin
     with a valid API Key
 
     Parameters:
@@ -208,7 +281,7 @@ def elevate_privileges(username: str):
 
 
 # Endpoint to delete user
-@blueprint_users.route('/delete', methods=["POST"])
+@blueprint_users.route('/delete', methods=["DELETE"])
 @cross_origin()
 @AccessControl.is_self_or_admin
 def delete_user():

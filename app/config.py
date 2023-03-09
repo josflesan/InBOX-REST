@@ -5,6 +5,7 @@ from pymongo import MongoClient
 
 class Config(object):
     DEBUG = True
+    API_HOST = "http://localhost:5000/api/v1"
     SECRET_KEY = "secret!"  #TODO: Change this
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(days=30)
     JWT_ACCESS_LIFESPAN = {"hours": 24}

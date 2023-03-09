@@ -4,7 +4,7 @@ import base64
 
 API_ADMIN_KEY= ""
 
-def login(api_v1_host):
+def test_login(api_v1_host):
     # Login using admin user
     endpoint = os.path.join(api_v1_host, 'users', 'login')
     response = requests.post(endpoint, json={"username": "anadminaccount", "password": "suchasecurepassword"})
@@ -50,14 +50,15 @@ def test_deliveries_update_delivered(api_v1_host):
     assert response.json()['result']
 
 def test_deliveries_get_image(api_v1_host):
-    endpoint = os.path.join(api_v1_host, 'deliveries', '63f52275b2422530719ec323', 'image')
-    response = requests.get(endpoint, headers={"Authorization": f"Bearer {API_ADMIN_KEY}"})
+    endpoint = os.path.join(api_v1_host, 'deliveries', 'image', '63f52275b2422530719ec323')
+    response = requests.post(endpoint, json={"username": "anadminaccount"}, headers={"Authorization": f"Bearer {API_ADMIN_KEY}"})
     assert response.status_code == 201
     image_data = base64.b64decode(response.json()['result'])
     with open("testImage.png", "wb") as fh:
         fh.write(image_data)
 
 def test_deliveries_create(api_v1_host):
-    endpoint = os.path.join(api_v1_host, 'deliveries')
-    response = requests.post(endpoint, headers={"Authorization": f"Bearer {API_ADMIN_KEY}"}, json={"hashCode": "acoolhash", "userId": "2"})
+    endpoint = os.path.join(api_v1_host, 'deliveries', 'create')
+    response = requests.post(endpoint, headers={"Authorization": f"Bearer {API_ADMIN_KEY}"}, json={"username": "anadminaccount", "hashCode": "acoolhash", "userId": "2"})
+    print(response.json())
     assert response.status_code == 201

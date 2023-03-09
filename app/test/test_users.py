@@ -84,5 +84,5 @@ def test_user_delete(api_v1_host):
 
     # Try to delete testuser
     endpoint = os.path.join(api_v1_host, 'users', 'delete')
-    response = requests.post(endpoint, json={"username": "testuser"}, headers={"Authorization": f"Bearer {admin_api_key}"})
+    response = requests.delete(endpoint, json={"username": "testuser"}, headers={"Authorization": f"Bearer {admin_api_key}"})
     assert response.status_code == 201
